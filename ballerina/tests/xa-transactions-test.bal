@@ -28,6 +28,39 @@ type XAResultCount record {
 @test:Config {
     groups: ["transaction", "xa-transaction"]
 }
+function testXATransactionRecovery() returns error? {
+    Client dbClient1 = check new (host, user, password, xaTransactionDB1, port,
+        connectionPool = {maxOpenConnections: 1},
+        options = {useXADatasource: true}
+    );
+    Client dbClient2 = check new (host, user, password, xaTransactionDB2, port,
+        connectionPool = {maxOpenConnections: 1},
+        options = {useXADatasource: true}
+    );
+
+    // create a broken transaction (prepared, awaitng decision) in the database
+    
+
+    transaction {
+        _ = check dbClient1->execute(`insert into CustomersTrx (customerId, name, creditLimit, country)
+                                values (2, 'Frank', 2000, 'USA')`);
+        _ = check dbClient2->execute(`insert into SalaryTrx (id, value ) values (2, 2000)`);
+        check commit;
+    } 
+
+    int count1 = check getCustomerCount(dbClient1, 69);
+    int count2 = check getSalaryCount(dbClient2, 69);
+    test:assertEquals(count1, 1, "Recovery failed in first database");
+    test:assertEquals(count2, 1, "Recovery failed in second database");
+
+    check dbClient1.close();
+    check dbClient2.close();
+}
+
+
+@test:Config {
+    groups: ["transaction", "xa-transaction"]
+}
 function testXATransactionSuccess() returns error? {
     Client dbClient1 = check new (host, user, password, xaTransactionDB1, port,
                                     connectionPool = {maxOpenConnections: 1},
